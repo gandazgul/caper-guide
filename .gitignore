@@ -1,0 +1,10 @@
+.DS_Store
+.deno/
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Local packages can contain copyrighted source material, personal preferences,
+# conversations, and play state. Publish only deliberately prepared examples.
+/adventures/

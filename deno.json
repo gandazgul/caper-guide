@@ -1,0 +1,25 @@
+{
+  "imports": {
+    "@earendil-works/pi-agent-core": "npm:@earendil-works/pi-agent-core@0.80.6",
+    "@earendil-works/pi-ai": "npm:@earendil-works/pi-ai@0.80.6",
+    "@earendil-works/pi-ai/compat": "npm:@earendil-works/pi-ai@0.80.6/compat",
+    "@earendil-works/pi-coding-agent": "npm:@earendil-works/pi-coding-agent@0.80.6",
+    "@earendil-works/pi-tui": "npm:@earendil-works/pi-tui@0.80.6",
+    "@std/assert": "jsr:@std/assert@1.0.14",
+    "typebox": "npm:typebox@1.1.38",
+    "yaml": "npm:yaml@2.9.0"
+  },
+  "tasks": {
+    "adventure": "deno run --allow-read --allow-write --allow-run=unpdf,mnemosyne,fd,rg --allow-env --allow-net --allow-sys=homedir,osRelease --deny-ffi src/cli.ts",
+    "check": "deno check src/cli.ts",
+    "test": "deno test --allow-read --allow-write --allow-run=deno,unpdf,mnemosyne --allow-env --allow-sys=homedir,osRelease --deny-ffi",
+    "fmt:check": "deno fmt --check",
+    "verify": "deno task check && deno task test && deno task fmt:check"
+  },
+  "fmt": {
+    "exclude": ["adventures/"],
+    "lineWidth": 110,
+    "indentWidth": 2,
+    "useTabs": false
+  }
+}
