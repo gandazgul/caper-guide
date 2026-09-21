@@ -241,7 +241,7 @@ elements.
   provide different cognitive postures.
 - **Durable artifacts:** Plans, PRDs, ADRs, lifecycle state, and future work records make work inspectable.
 - **Execution loop:** Feature work moves from plan to review to execution to validation.
-- **External tools:** Shell, git, tests, code search, project files, browser workspace, Mnemosyne, Cymbal, and
+- **External tools:** Shell, git, tests, code search, project files, browser workspace, Mnemoteca, Cymbal, and
   Snip extend the model's reach.
 - **Validation:** Mechanical validation, semantic review, and merge-back create a stronger feedback loop than
   chat-only coding.

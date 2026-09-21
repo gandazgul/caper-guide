@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { pathExists, playRoot, readJson, safeId, writeJsonAtomic, writeTextAtomic } from "./io.ts";
 import type { AdventurePackage } from "./package.ts";
 import type { GameState, StateChange, StateEvent } from "./types.ts";
+import { assertCharacterId } from "./characters.ts";
 
 function now(): string {
   return new Date().toISOString();
@@ -96,6 +97,7 @@ async function loadState(pkg: AdventurePackage, playInput: string): Promise<Game
     adventureId: pkg.manifest.id,
     playId,
     revision: 0,
+    characterSetupComplete: false,
     startedAt: timestamp,
     updatedAt: timestamp,
     elapsedTurns: 0,
@@ -116,6 +118,40 @@ function assertPositiveInteger(value: number, label: string): void {
 
 function applyChange(pkg: AdventurePackage, state: GameState, change: StateChange): void {
   switch (change.kind) {
+    case "select_character":
+      assertCharacterId(change.characterId);
+      if (state.playerCharacterId && state.playerCharacterId !== change.characterId) {
+        throw new Error(
+          "This play already has a character. Start a new --play for a different character; existing state is preserved.",
+        );
+      }
+      state.playerCharacterId = change.characterId;
+      return;
+    case "complete_character_setup":
+      if (!state.playerCharacterId) throw new Error("Select a character before completing setup.");
+      state.characterSetupComplete = true;
+      return;
+    case "set_character_sheet": {
+      if (!state.playerCharacterId) throw new Error("Select a character before setting their sheet.");
+      if (
+        Object.keys(change.attributes).length > 40 || change.abilities.length > 40 ||
+        change.rulesNotes.length > 4000
+      ) throw new Error("Character sheet is too large.");
+      for (const [key, value] of Object.entries(change.attributes)) {
+        if (safeId(key) !== key || !Number.isFinite(value)) {
+          throw new Error("Character attributes need safe IDs and finite numbers.");
+        }
+      }
+      if (change.abilities.some((ability) => typeof ability !== "string" || ability.length > 1000)) {
+        throw new Error("Invalid character ability.");
+      }
+      state.characterSheet = {
+        attributes: change.attributes,
+        abilities: change.abilities,
+        rulesNotes: change.rulesNotes,
+      };
+      return;
+    }
     case "set_current_scene": {
       if (!pkg.assets.scenes.scenes.some((scene) => scene.id === change.sceneId)) {
         throw new Error(`Unknown scene ${change.sceneId}.`);

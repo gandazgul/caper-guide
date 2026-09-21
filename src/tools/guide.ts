@@ -5,6 +5,12 @@ import type { AdventurePackage } from "../adventure/package.ts";
 import { toolResult } from "./common.ts";
 
 const stateChangeSchema = Type.Union([
+  Type.Object({
+    kind: Type.Literal("set_character_sheet"),
+    attributes: Type.Record(Type.String(), Type.Number()),
+    abilities: Type.Array(Type.String({ maxLength: 1000 }), { maxItems: 40 }),
+    rulesNotes: Type.String({ maxLength: 4000 }),
+  }),
   Type.Object({ kind: Type.Literal("set_current_scene"), sceneId: Type.String() }),
   Type.Object({ kind: Type.Literal("advance_turns"), amount: Type.Integer({ minimum: 1 }) }),
   Type.Object({
@@ -74,6 +80,17 @@ export function createGuideTools(pkg: AdventurePackage, playId: string): ToolDef
     }),
     executionMode: "sequential",
     async execute(_id, params: any) {
+      const current = await loadOrCreateGameState(pkg, playId);
+      if (
+        !current.characterSetupComplete &&
+        params.changes.some((change: any) =>
+          ["set_current_scene", "advance_turns", "set_clock", "reveal_secret"].includes(change.kind)
+        )
+      ) {
+        throw new Error(
+          "Finish character setup with the player before advancing the adventure. Use character_list/create/select and character_finish_setup; preserve existing play state.",
+        );
+      }
       return toolResult(
         await applyStateTransaction(pkg, playId, params.expectedRevision, params.reason, params.changes),
       );

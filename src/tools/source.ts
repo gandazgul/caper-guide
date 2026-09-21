@@ -36,7 +36,7 @@ export function resolvePdfInputPath(input: string, baseDirectory: string): strin
   if (path.startsWith("@")) path = path.slice(1);
   if (path === "~") path = homedir();
   else if (path.startsWith("~/")) path = resolve(homedir(), path.slice(2));
-  if (!path) throw new Error("A PDF path is required.");
+  if (!path) throw new Error("A file path is required.");
   return isAbsolute(path) ? resolve(path) : resolve(baseDirectory, path);
 }
 
@@ -95,7 +95,8 @@ export function createSourceTools(pkg: AdventurePackage): ToolDefinition[] {
   const packageInspect: ToolDefinition<any> = {
     name: "adventure_inspect",
     label: "Adventure Inspect",
-    description: "Inspect package status, durable asset counts, PDF locations, and validation issues.",
+    description:
+      "Inspect package status, durable asset counts, PDF and image source locations, and validation issues.",
     promptSnippet: "Inspect the adventure package and its readiness",
     parameters: Type.Object({}),
     executionMode: "sequential",

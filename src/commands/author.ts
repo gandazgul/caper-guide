@@ -5,6 +5,7 @@ import { runAgentTui } from "../agents/runtime.ts";
 import { pathExists } from "../adventure/io.ts";
 import { createAdventurePackage, importPdf, packageSummary, saveManifest } from "../adventure/package.ts";
 import { createAuthorTools } from "../tools/author.ts";
+import { createAuthorFileTools } from "../tools/files.ts";
 import { createAdventureReadTool } from "../tools/guide.ts";
 import { createAuthorMemoryTools } from "../tools/memory.ts";
 import { createQuestionnaireTool } from "../tools/questionnaire.ts";
@@ -100,6 +101,7 @@ export async function runAuthorCommand(
   const tools = [
     createAdventureReadTool(pkg),
     createPdfImportTool(pkg, context.cwd),
+    ...createAuthorFileTools(pkg, context.cwd),
     ...createSourceTools(pkg),
     createQuestionnaireTool(pkg),
     ...createAuthorTools(pkg),
@@ -121,7 +123,7 @@ export async function runAuthorCommand(
       `Active adventure: ${pkg.manifest.title}`,
       `Durable package: ${pkg.root}`,
       "",
-      "Describe what you want in ordinary language. To add a PDF to this adventure, say Load and give its path. " +
+      "Describe what you want in ordinary language. To add a PDF or map image to this adventure, say Load and give its path. " +
       "Type @ to find files; ~/ and absolute paths also work.",
       "To switch adventures, use /quit and run deno task adventure author to return to the menu.",
     ].join("\n"),

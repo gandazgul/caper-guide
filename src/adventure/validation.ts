@@ -14,7 +14,7 @@ function recordIssue(
 }
 
 export function validateEvidence(pkg: AdventurePackage, citations: EvidenceRef[]): string[] {
-  if (citations.length === 0) return ["At least one PDF page citation is required."];
+  if (citations.length === 0) return ["At least one source citation is required (PDF page or image page 1)."];
   const errors: string[] = [];
   for (const citation of citations) {
     const source = pkg.sources.find((candidate) => candidate.id === citation.sourceId);
@@ -33,7 +33,7 @@ export function assertEvidence(pkg: AdventurePackage, citations: EvidenceRef[]):
 
 export function validateAdventure(pkg: AdventurePackage): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  if (pkg.sources.length === 0) {
+  if (!pkg.sources.some((source) => source.kind !== "image")) {
     recordIssue(issues, "blocker", "source.missing", "Import at least one adventure PDF.");
   }
 

@@ -15,6 +15,8 @@ import {
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentDefinition } from "./types.ts";
 import type { AdventurePackage } from "../adventure/package.ts";
+import { ToolGroupDisplay } from "../ui/tool-groups.ts";
+import { installGuideCompactionContinuity } from "./compaction.ts";
 
 export function parseModelRef(value: string): { provider: string; id: string } {
   const slash = value.indexOf("/");
@@ -155,6 +157,13 @@ export function buildAgentSystemPrompt(
   ].join("\n");
 }
 
+export function selectStartupInstruction(
+  options: { startupInstruction?: string; resumeInstruction?: string },
+  hasConversation: boolean,
+): string | undefined {
+  return hasConversation ? options.resumeInstruction : options.startupInstruction;
+}
+
 export async function runAgentTui(options: {
   pkg: AdventurePackage;
   agent: AgentDefinition;
@@ -163,6 +172,7 @@ export async function runAgentTui(options: {
   resumeArgs: string[];
   welcomeMessage: string;
   startupInstruction?: string;
+  resumeInstruction?: string;
   workingDirectory?: string;
   model?: string;
   continueSession?: boolean;
@@ -201,6 +211,8 @@ export async function runAgentTui(options: {
     ? await continueAdventureSession(sessionDir, workingDirectory)
     : SessionManager.create(workingDirectory, sessionDir);
   const dynamicContext = buildAgentSystemPrompt(options.agent, options.pkg, workingDirectory);
+  const toolDisplay = new ToolGroupDisplay();
+  const displayTools = toolDisplay.decorate(options.tools);
   const requestedModel = options.model ?? options.agent.model;
 
   const createRuntime = async (runtimeOptions: {
@@ -238,8 +250,9 @@ export async function runAgentTui(options: {
       model,
       thinkingLevel: options.agent.thinkingLevel,
       tools: options.agent.tools,
-      customTools: options.tools,
+      customTools: displayTools,
     });
+    if (options.agent.id === "guide") installGuideCompactionContinuity(created.session);
     if (typeof options.agent.temperature === "number") {
       const originalStream = created.session.agent.streamFn;
       const temperature = options.agent.temperature;
@@ -267,6 +280,7 @@ export async function runAgentTui(options: {
   const mode = new InteractiveMode(runtime, {
     verbose: false,
   });
+  toolDisplay.install(mode);
   const modeInternals = mode as unknown as {
     ui: {
       stop(): void;
@@ -330,13 +344,14 @@ export async function runAgentTui(options: {
         details: { kind: "welcome", agent: options.agent.id },
       });
     }
-    if (!hasConversation && options.startupInstruction) {
+    const startupInstruction = selectStartupInstruction(options, hasConversation);
+    if (startupInstruction) {
       await runtime.session.sendCustomMessage(
         {
           customType: "adventure-runner.startup",
-          content: options.startupInstruction,
+          content: startupInstruction,
           display: false,
-          details: { kind: "startup", agent: options.agent.id },
+          details: { kind: hasConversation ? "resume" : "startup", agent: options.agent.id },
         },
         { triggerTurn: true },
       );

@@ -23,6 +23,10 @@ import { fileURLToPath } from "node:url";
 
 Deno.test("launch permissions allow OS metadata used by model request headers without prompting", async () => {
   const config = JSON.parse(await Deno.readTextFile(new URL("../../deno.json", import.meta.url)));
+  const allowedCommands = config.tasks.adventure.split(" ").find((arg: string) =>
+    arg.startsWith("--allow-run=")
+  );
+  assert(allowedCommands.split("=")[1].split(",").includes("mnemoteca"));
   const permission = config.tasks.adventure.split(" ").find((arg: string) => arg.startsWith("--allow-sys="));
   assert(permission);
   const probe =

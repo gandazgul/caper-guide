@@ -43,7 +43,7 @@ export class AdventurePicker implements Component {
           value: adventure.root,
           label: adventure.title,
           description:
-            `${adventure.status} · ${adventure.sourceCount} PDF(s) · ${adventure.decisionCount}/7 setup choices`,
+            `${adventure.status} · ${adventure.sourceCount} source(s) · ${adventure.decisionCount}/7 setup choices`,
         })),
         {
           value: NEW,

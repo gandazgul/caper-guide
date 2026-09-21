@@ -8,6 +8,7 @@ import {
   harnessSettings,
 } from "../agents/runtime.ts";
 import { runAuthorCommand } from "../commands/author.ts";
+import { runGuideCommand } from "../commands/guide.ts";
 import { resolvePdfInputPath } from "../tools/source.ts";
 import {
   markAdventureReady,
@@ -197,6 +198,35 @@ Deno.test("a complete cited adventure can become ready", async () => {
     assertEquals(validateAdventure(pkg).filter((issue) => issue.severity === "blocker"), []);
     await markAdventureReady(pkg);
     assertEquals(pkg.manifest.status, "ready");
+    let guideStarted = false;
+    await runGuideCommand([root, "--play", "beginner"], { cwd: root }, {
+      runTui: (options) => {
+        guideStarted = true;
+        assert(options.welcomeMessage.includes("don't have a character"));
+        assert(options.startupInstruction?.includes("do not begin the opening scene"));
+        assert(options.resumeInstruction?.includes("Previously on…"));
+        assert(options.resumeInstruction?.includes("without advancing time"));
+        for (
+          const name of [
+            "character_create",
+            "character_select",
+            "character_update",
+            "character_memory_recall",
+            "roll_dice",
+            "record_roll_outcome",
+            "roll_history",
+          ]
+        ) {
+          assert(options.tools.some((tool) => tool.name === name));
+          assert(options.agent.tools.includes(name));
+        }
+        return Promise.resolve();
+      },
+    });
+    assert(guideStarted);
+    const beginnerState = await loadOrCreateGameState(pkg, "beginner");
+    assertEquals(beginnerState.elapsedTurns, 0);
+    assertEquals(beginnerState.characterSetupComplete, false);
   } finally {
     await Deno.remove(root, { recursive: true });
   }
@@ -257,7 +287,11 @@ Deno.test("adventure-local agent layers append prompts but cannot remove protect
     assert(guide.systemPrompt.includes("nautical voice"));
     assert(guide.tools.includes("game_state_read"));
     assert(guide.tools.includes("game_state_update"));
+    assert(guide.tools.includes("roll_dice"));
+    assert(guide.tools.includes("record_roll_outcome"));
+    assert(guide.tools.includes("roll_history"));
     assert(guide.tools.includes("memory_recall"));
+    assert(guide.tools.includes("memory_store"));
     const author = await loadAgentDefinition("author", root);
     assert(author.tools.includes("source_load_pdf"));
   } finally {

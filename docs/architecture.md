@@ -1,5 +1,29 @@
 # Adventure Runner architecture
 
+## Character onboarding and continuity
+
+The Guide offers character creation or selection before play progression. Reusable narrative profiles have
+UUIDs and revision-checked atomic updates under `~/.adventure-guide/characters/`. A play records its selected
+character ID, setup confirmation and rules-specific sheet in the existing journaled state transactions.
+Character tools require player approval; profile updates preserve omitted fields. Mechanical tools prevent
+scene/turn/clock/secret progression until setup is confirmed. Legacy plays retain their existing state.
+
+Mnemoteca uses a separate `caper-character-<uuid>` collection for each character's automatically saved,
+player-known experiences. World/facilitation memory retains its adventure collection. Recall is filtered by
+play tags (and adventure tags for characters); broader character-history recall is explicit. Guide memory does
+not require per-note consent; Author preferences still do. Neither memory nor the reusable profile is
+authoritative for current mechanics, and loading a character never transfers mechanical state.
+
+Guide launches with an existing conversation send a dedicated resume instruction that triggers a brief
+Previously on recap from saved state, profile and both memory scopes, without replaying actions or advancing
+time. Author sessions retain their existing startup behavior. Gameplay memory writes include recording time
+and adventure/play context; newest corrections supersede older impressions without erasing historical beliefs.
+
+Tool display groups are a harness-owned projection of the pinned 0.80.6 TUI's chat container. The original
+tool components remain in place for updates and Ctrl+O toggling. Collapsed calls occupy one row each; expanded
+calls have a 500-line display cap without truncating persisted or model-facing results. Tests exercise the
+actual upstream components to detect incompatibility when upgrading the library.
+
 This implementation follows the domain-harness loop from `docs/vision/domain-harness-blueprint.md` and the
 bounded facilitator model from `docs/ttrpg-campaign-harness-handoff.md`.
 
@@ -51,12 +75,12 @@ mechanical state.
 
 ## Four kinds of persistence
 
-| Layer                | Purpose                                     | Authority                       |
-| -------------------- | ------------------------------------------- | ------------------------------- |
-| `sources/`           | Copied PDFs, hashes, page-marked extraction | Evidence from the publication   |
-| `assets/`            | Human-reviewed runnable interpretation      | Canon and runtime contract      |
-| `plays/*/state.json` | Facts that change during play               | Current mechanical truth        |
-| Mnemosyne            | Preferences and loose facilitation notes    | Helpful, non-mechanical context |
+| Layer                | Purpose                                    | Authority                       |
+| -------------------- | ------------------------------------------ | ------------------------------- |
+| `sources/`           | Copied PDFs/images, hashes, PDF extraction | Reference evidence              |
+| `assets/`            | Human-reviewed runnable interpretation     | Canon and runtime contract      |
+| `plays/*/state.json` | Facts that change during play              | Current mechanical truth        |
+| Mnemoteca            | Preferences and loose facilitation notes   | Helpful, non-mechanical context |
 
 JSONL sessions are conversation history, not domain truth. Losing a chat does not lose the adventure or
 current game state.
@@ -74,7 +98,7 @@ The Author cannot make the package ready by narration. It must use domain tools:
 1. `source_load_pdf` resolves an author-supplied path against the launch directory, imports with `unpdf`, and
    copies the source and extraction into durable package storage.
 2. `source_search` and `source_read_pages` retrieve stable evidence.
-3. `ask_author` validates 2-4 options, a recommendation, and PDF citations before opening the TUI.
+3. `ask_author` validates 2-4 options, a recommendation, and source citations before opening the TUI.
 4. `author_record_setup` and the upsert tools validate evidence again before atomic JSON writes.
 5. `adventure_validate` checks coverage, references, and citations.
 6. `adventure_mark_ready` refuses while any blocker remains.
@@ -85,6 +109,23 @@ duplicate IDs, scene locations/secrets/transitions, clock bounds, and all runtim
 
 This is the harness's evaluation-and-action gate: model reasoning proposes content, but deterministic code
 decides whether the package is structurally acceptable.
+
+### File and visual evidence
+
+The Author alone has `file_read`, `source_load_image`, and `source_view_page`. Text reads are bounded,
+read-only reference access, not evidence registration. Images are copied into the package and indexed with
+`kind: image`, a MIME type, a stable content hash, and `pageCount: 1`. The existing `{ sourceId, page }`
+citation contract therefore covers maps without a second evidence store. PDF records with no `kind` remain
+valid. At least one adventure PDF is still required; images are supplementary sources. PDF text search skips
+images rather than inventing an OCR transcript.
+
+Visual reads resolve stored paths inside the package and verify hashes. PDFs render from a temporary snapshot
+through Poppler's `pdftoppm` with bounded resolution, timeout, and cleanup; images return Pi-compatible image
+content blocks directly. This does not add a native npm canvas/FFI dependency. The current model must
+advertise image input or the tool fails explicitly. Imports invalidate readiness; viewing does not change
+canon or play state. Raw visual tools are not exposed to the Guide because tool results could reveal
+annotated-map secrets in the player TUI. The Guide instead uses the Author's reviewed, cited visual
+interpretations in durable assets.
 
 ## Guide state transaction
 

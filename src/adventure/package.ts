@@ -4,6 +4,7 @@ import type {
   AdventureManifest,
   CanonAsset,
   EntitiesAsset,
+  PdfSourceRecord,
   RuntimeProfile,
   ScenesAsset,
   SetupAsset,
@@ -125,8 +126,16 @@ export async function loadAdventurePackage(rootInput: string): Promise<Adventure
   for (const source of sources) {
     if (
       typeof source.id !== "string" || safeId(source.id) !== source.id ||
-      source.pdfPath !== `sources/files/${source.id}.pdf` ||
-      source.extractedPath !== `sources/extracted/${source.id}.md` ||
+      (source.kind === "image"
+        ? source.pageCount !== 1 ||
+          !["image/png", "image/jpeg", "image/webp"].includes(source.mimeType) ||
+          source.imagePath !==
+            `sources/files/${source.id}.${
+              source.mimeType === "image/jpeg" ? "jpg" : source.mimeType.slice(6)
+            }`
+        : (source.kind !== undefined && source.kind !== "pdf") ||
+          source.pdfPath !== `sources/files/${source.id}.pdf` ||
+          source.extractedPath !== `sources/extracted/${source.id}.md`) ||
       !Number.isSafeInteger(source.pageCount) || source.pageCount < 1
     ) {
       throw new Error(`Invalid source record ${source.id}: check its paths and page count.`);
@@ -171,8 +180,14 @@ export function splitExtractedPages(sourceId: string, markdown: string): SourceP
 }
 
 export async function readSourcePages(pkg: AdventurePackage, sourceId?: string): Promise<SourcePage[]> {
-  const sources = sourceId ? pkg.sources.filter((source) => source.id === sourceId) : pkg.sources;
-  if (sourceId && sources.length === 0) throw new Error(`Unknown source ${sourceId}`);
+  const selected = sourceId ? pkg.sources.filter((source) => source.id === sourceId) : pkg.sources;
+  if (sourceId && selected.length === 0) throw new Error(`Unknown source ${sourceId}`);
+  if (sourceId && selected[0].kind === "image") {
+    throw new Error(
+      "This source is an image, not a text extraction. The Author can use source_view_page with page 1; the Guide should use its cited authored assets.",
+    );
+  }
+  const sources = selected.filter((source): source is PdfSourceRecord => source.kind !== "image");
   const pageSets = await Promise.all(
     sources.map(async (source) =>
       splitExtractedPages(source.id, await Deno.readTextFile(join(pkg.root, source.extractedPath)))
@@ -195,11 +210,13 @@ export async function importPdf(
   pkg: AdventurePackage,
   pdfInput: string,
   signal?: AbortSignal,
-): Promise<SourceRecord> {
+): Promise<PdfSourceRecord> {
   signal?.throwIfAborted();
   const absolutePdf = await Deno.realPath(pdfInput);
   const digest = await sha256(absolutePdf);
-  const duplicate = pkg.sources.find((source) => source.sha256 === digest);
+  const duplicate = pkg.sources.find((source): source is PdfSourceRecord =>
+    source.kind !== "image" && source.sha256 === digest
+  );
   if (duplicate) return duplicate;
 
   const command = new Deno.Command("unpdf", {
@@ -252,7 +269,7 @@ export async function importPdf(
     Deno.copyFile(absolutePdf, join(pkg.root, pdfPath)),
     Deno.writeTextFile(join(pkg.root, extractedPath), markdown),
   ]);
-  const record: SourceRecord = {
+  const record: PdfSourceRecord = {
     id,
     title: extractedTitle(absolutePdf, markdown),
     sha256: digest,
@@ -277,9 +294,11 @@ export function packageSummary(pkg: AdventurePackage): Record<string, unknown> {
     sources: pkg.sources.map((source) => ({
       id: source.id,
       title: source.title,
+      kind: source.kind ?? "pdf",
       pages: source.pageCount,
-      pdf: join(pkg.root, source.pdfPath),
-      extraction: join(pkg.root, source.extractedPath),
+      ...(source.kind === "image"
+        ? { image: join(pkg.root, source.imagePath), mimeType: source.mimeType }
+        : { pdf: join(pkg.root, source.pdfPath), extraction: join(pkg.root, source.extractedPath) }),
     })),
     assets: {
       setupDecisions: pkg.assets.setup.decisions.length,

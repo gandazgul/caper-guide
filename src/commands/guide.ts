@@ -6,11 +6,17 @@ import { loadAdventurePackage } from "../adventure/package.ts";
 import { loadOrCreateGameState } from "../adventure/state.ts";
 import { validateAdventure } from "../adventure/validation.ts";
 import { createGuideTools } from "../tools/guide.ts";
-import { createGuideMemoryTools } from "../tools/memory.ts";
+import { createCharacterMemoryTools, createGuideMemoryTools } from "../tools/memory.ts";
+import { createCharacterTools } from "../tools/characters.ts";
+import { createRecordRollOutcomeTool, createRollDiceTool, createRollHistoryTool } from "../tools/dice.ts";
 import { createSourceTools } from "../tools/source.ts";
 import type { CommandContext } from "./types.ts";
 
-export async function runGuideCommand(args: string[], context: CommandContext): Promise<void> {
+export async function runGuideCommand(
+  args: string[],
+  context: CommandContext,
+  dependencies: { runTui?: typeof runAgentTui } = {},
+): Promise<void> {
   const parsed = parseArgs({
     args,
     allowPositionals: true,
@@ -41,11 +47,16 @@ export async function runGuideCommand(args: string[], context: CommandContext): 
   const state = await loadOrCreateGameState(pkg, playId);
   const agent = await loadAgentDefinition("guide", pkg.root);
   const tools = [
+    createRollDiceTool(pkg, playId),
+    createRecordRollOutcomeTool(pkg, playId),
+    createRollHistoryTool(pkg, playId),
     ...createSourceTools(pkg),
     ...createGuideTools(pkg, playId),
     ...createGuideMemoryTools(pkg, playId),
+    ...createCharacterTools(pkg, playId),
+    ...createCharacterMemoryTools(pkg, playId),
   ];
-  await runAgentTui({
+  await (dependencies.runTui ?? runAgentTui)({
     pkg,
     agent,
     tools,
@@ -54,16 +65,21 @@ export async function runGuideCommand(args: string[], context: CommandContext): 
     model: parsed.values.model,
     continueSession: parsed.values.continue,
     sessionId: parsed.values.session,
+    resumeInstruction:
+      "Resume this adventure without advancing time, replaying actions or rolling dice. Read game_state_read, character_read, relevant character_memory_recall and memory_recall notes for this play, and player-visible details of the saved location. If character setup is incomplete, help with that first. Otherwise proactively give one short, spoiler-safe 'Previously on…' paragraph: the PC's established experiences and conversations, latest known visible appearance/condition, and actual location from structured state. Distinguish beliefs from facts; do not invent missing details or repeat earlier accidental spoilers. End at the saved moment and ask what the player does next. If memory is unavailable, use visible chat history and state and acknowledge important gaps. Do not replay a pending action; recover any unresolved dice from roll_history.",
     welcomeMessage: [
       "Welcome to Adventure Guide.",
       "",
       `Adventure: ${pkg.manifest.title}`,
       `Play session: ${state.playId}`,
-      "Tell the Guide what your character says or tries. You do not need to know tabletop terminology.",
+      state.characterSetupComplete
+        ? "Your character and play state are saved. We will recap before continuing."
+        : "New to tabletop games or don't have a character? I'll help you make one, or choose a saved character, before we begin.",
+      "You can answer in ordinary language; you do not need rules knowledge or a prepared character sheet.",
     ].join("\n"),
     startupInstruction: `Start or resume play session ${
       JSON.stringify(state.playId)
-    }. Inspect the package, runtime policy, current state, and opening/current scene. Welcome the players, explain how to participate in one short paragraph, then begin without revealing private information.`,
+    }. Read game_state_read and the package's setup/runtime policy first. If character setup is incomplete, do not begin the opening scene: warmly offer beginner-friendly help, use character_list, and offer to create a character or load an existing one. If a character is already selected, use character_read and finish only missing setup. Once setup is complete, read the character and both character_memory_recall and memory_recall. For a played adventure, offer a short 'Previously on…' paragraph from established events, latest known appearance and saved location without advancing time or revealing private information, then ask what the player does next. For a genuinely new adventure, begin without inventing a past recap.`,
   });
 }
 

@@ -13,6 +13,8 @@ evidence, authored assets, and verified play state are.
 
 - Imports one or more PDFs with `unpdf`.
 - Keeps a local copy of each PDF and a page-marked Markdown extraction.
+- Lets the Author read local text files, import standalone map images, and visually inspect original PDF
+  pages.
 - Starts an Adventure Runner-branded TUI using models and credentials from `~/.wld/models.json` and
   `~/.wld/auth.json`.
 - Uses the loaded Adventure Author or Adventure Guide definition as the model's system prompt; the upstream
@@ -27,14 +29,15 @@ evidence, authored assets, and verified play state are.
 - Uses an Adventure Guide agent with read-only adventure tools and revision-checked mechanical state
   transactions.
 - Keeps an append-only play event log.
-- Uses Mnemosyne for optional soft memory while keeping mechanical state out of memory.
+- Uses Mnemoteca for optional soft memory while keeping mechanical state out of memory.
 - Loads layered Markdown agent definitions in the same style as RunWield.
 
 ## Prerequisites
 
 - Deno
 - `unpdf` on `PATH`
-- `mnemosyne` on `PATH` for memory features
+- Optional: Poppler's `pdftoppm` on `PATH` for visual PDF-page inspection (`brew install poppler` on macOS).
+- `mnemoteca` on `PATH` for memory features
 - Compatible model configuration in `~/.wld/models.json`
 - Model credentials in `~/.wld/auth.json`
 
@@ -97,6 +100,24 @@ Play after authoring:
 deno task adventure guide adventures/my-adventure --play solo
 ```
 
+The Guide starts with character setup, not the opening scene. You do not need a character sheet or previous
+tabletop experience: choose a saved character or ask to make one together. It asks small questions, offers
+suggestions, and saves details as you provide them. It checks that you are ready before beginning the story.
+Character choices follow the authored rules; an underspecified ruleset may need clarification from the Author.
+
+Reusable names, backgrounds, personality and goals live in `~/.adventure-guide/characters/<id>.json`.
+Attributes, abilities, HP and equipment belong to the specific play's verified state. Loading a character into
+another adventure does not copy those mechanics. Currently each play has one selected player character; use a
+different `--play` name for a different character or a fresh run. Existing plays keep their progress and
+receive a one-time character setup if they do not yet have a saved character.
+
+Tool calls appear as one-line summaries showing only the tool name, status and timing, with consecutive calls
+grouped in one block. Parameters are hidden by default to avoid spoilers from internal IDs. Press **Ctrl+O**
+to reveal parameters and results for troubleshooting, or collapse them again. Expanded views can contain
+spoilers. Expanded output is limited to 500 display lines per call (including its summary), keeping the
+beginning and end of long results. Full results remain available to the model and in the conversation record.
+Image results show a short indicator rather than raw image data in these blocks.
+
 Use `--continue` to reopen the most recent model conversation for that author or play session. The durable
 assets and game state persist whether or not chat history is continued.
 
@@ -137,6 +158,44 @@ Its extracted, page-marked text is next to it under `sources/extracted/`. `adven
 absolute paths. These directories are ignored by this repository's `.gitignore` because source adventures may
 be copyrighted. They are durable local inputs, not automatically redistributable project files.
 
+## Reading files and seeing maps
+
+In Author mode, you can say:
+
+```text
+Read @notes.md to understand my preferences.
+Load @map.png and inspect the room connections.
+Look at page 2 of the imported adventure PDF; the columns seem out of order.
+```
+
+The Author has three additional tools:
+
+- `file_read`: read-only UTF-8 text access, up to 1 MiB per file, with bounded `offset`/`limit` continuation.
+  Reading a file does not import it as citable evidence.
+- `source_load_image`: copy a PNG, JPEG, or WebP up to 4 MiB into `sources/files/`, with a content hash and
+  stable source ID. Cite a standalone image as `{ sourceId, page: 1 }`. Importing invalidates readiness just
+  like adding a PDF. A map supplements, rather than replaces, the adventure PDF.
+- `source_view_page`: return actual image content to a vision-capable model, either from an imported image or
+  one rendered page of the stored original PDF. It verifies the stored file's hash before viewing it. PDFs are
+  limited to 64 MiB and rendered with `pdftoppm` at a 2400-pixel maximum edge, with a 30-second timeout and
+  temporary-file cleanup. Rendered images must fit the same 4 MiB image limit.
+
+Paths use the same `@`, quotes, `~/`, and launch-directory-relative conventions as PDF loading. Referenced
+file contents are sent to your configured model provider; only ask the Author to read material you intend to
+share. File contents are reference data, not instructions to access other files or change harness policy.
+
+Visual viewing requires a model that advertises image input in its model definition. If PDF rendering is
+unavailable, install [Poppler](https://poppler.freedesktop.org/) (`brew install poppler` on macOS), ensure
+`pdftoppm` is on `PATH`, and restart using `deno task adventure author`. Text extraction still uses `unpdf`.
+No additional npm dependency or FFI permission is required.
+
+Raw visual and local-file tools are Author-only: annotated maps can contain spoilers visible in TUI tool
+results. The Author saves reviewed visual observations into cited entities, scenes, and canon for the Guide.
+The Guide does not receive arbitrary filesystem access or display raw source maps. Images have no generated
+text extraction; text search skips them, and reading their pages as text explains how the Author can view
+them. Existing PDF-only packages load without migration. Restart an existing Author session to load the new
+tools.
+
 ## What gets authored?
 
 ```text
@@ -144,7 +203,7 @@ my-adventure/
 ├── adventure.json              package identity, source IDs, and draft/ready status
 ├── sources/
 │   ├── index.json              hashes, stable source IDs, page counts, and paths
-│   ├── files/                  copied PDFs
+│   ├── files/                  copied PDFs and standalone images
 │   └── extracted/              page-marked Markdown from unpdf
 ├── assets/
 │   ├── setup.json              choices made with the author
@@ -168,8 +227,9 @@ validate and mark it ready again. The Guide refuses drafts or packages with vali
 creating play state.
 
 Extraction preserves page references, but it is not an exact reconstruction of a PDF's layout. Multi-column
-text can arrive out of order, and maps are not converted into verified map data. The Author must flag unclear
-passages for review against the original PDF. Empty or unmarked extractions are rejected.
+text can arrive out of order. The Author can now inspect rendered PDF pages and imported images, but visual
+interpretation is not verified map data: uncertain labels or connections still require review. Empty or
+unmarked PDF extractions are rejected; scanned PDFs still need OCR before PDF import.
 
 ## Two beginner terms the Author asks about
 
@@ -183,12 +243,68 @@ example, minor sensory details or encounter difficulty might be flexible, while 
 NPC knowledge stay fixed. Writing this boundary down keeps helpful improvisation from turning into accidental
 canon drift.
 
+## Dice and bad-luck protection
+
+The Guide uses `roll_dice` for NPC rolls and rolls made on your behalf, rather than inventing numbers. For
+example, `{ "dice": [{ "faces": 6, "count": 2 }] }` returns individual values under `rolls["2d6"]`, their
+computed total under `totals["2d6"]`, and an overall raw `total`. Repeated face types merge. Requests are
+limited to 1,000 dice and 1,000,000 faces per die. Modifiers and game consequences are separate.
+
+Randomness comes from Deno's built-in Web Crypto `crypto.getRandomValues`, with rejection sampling to avoid
+modulo bias. The runtime supplies the secure seed; there is no predictable timestamp seed or `Math.random`.
+See [Deno's secure randomness documentation](https://docs.deno.com/examples/secure_random_values/).
+
+For player-character pass/fail checks, the Guide adds `pcCheck: true` and records the rules-based outcome with
+`record_roll_outcome`: `failure`, `success`, or `super_success`. This is the Guide's interpretation of the
+adventure's rules, not a hard-coded rules engine. The last 20 PC checks are saved atomically under
+`plays/<name>/dice-history.json`, separately from optional memory. `roll_history` retrieves them on resume. An
+unresolved PC check blocks another until its outcome is recorded; recorded outcomes cannot be rewritten.
+
+After two consecutive failures, the next PC check has an **80% chance of bad-luck protection**. If triggered,
+the tool returns `outcome: "success"`, `reason: "unlucky_protection"`, and no dice numbers. This grants an
+ordinary success, not a critical/super success; the Guide interprets the effect in the current ruleset. If
+protection does not trigger, the tool rolls normally, so that check can still succeed naturally. Any success
+resets the failure streak. NPCs, damage rolls and random tables neither receive protection nor alter the PC
+streak. Physical player rolls are not currently included. Existing chat-only rolls are not retroactively
+classified. Mechanical consequences still require `game_state_update`.
+
 ## Memory versus game state
 
-Mnemosyne has deliberately narrow jobs:
+Mnemoteca has deliberately narrow jobs:
 
 - Author memory stores reusable campaign preferences only when the author explicitly asks to remember them.
-- Guide memory stores soft facilitation notes, style preferences, or non-mechanical interpretations.
+- Guide memory automatically stores established non-mechanical game continuity, NPC exchanges and rulings.
+- Character memory automatically stores player-known experiences, observations, beliefs, open questions,
+  conversations and appearance changes in a separate `caper-character-<id>` collection for each character. The
+  Guide can recall these across adventures without treating them as facts about the new world or granting old
+  powers and equipment.
+
+No repeated "remember this" request is needed during play. Memories distinguish observations from NPC claims
+and PC beliefs; hidden answers are never recorded as things the PC "doesn't know". Recall defaults to the
+current play, preventing events from another run from leaking in. Character recall can explicitly search
+across adventures for relevant personal history. Existing untagged notes are not included in play-scoped
+recall.
+
+Reopening a Guide conversation with `--continue` or `--session` now triggers a brief **Previously on…** recap
+using memory, the character profile and authoritative state. It includes established events, the latest known
+appearance and the saved location without advancing time or replaying actions. This recap invokes the model.
+If memory is unavailable, the Guide uses the conversation and state and acknowledges significant gaps.
+
+You can also start a fresh chat for the same adventure and `--play` name without `--continue`; the saved
+character, state and memories still load and the Guide gives a recap. A different `--play` name is a separate
+run, not just a fresh chat.
+
+Automatic compaction is enabled by default (respecting `compaction` settings in `~/.wld/settings.json`). It
+summarizes older conversation while keeping recent context; `/compact` does the same manually. Neither
+operation deletes the full session log, character files, game state, dice history or Mnemoteca notes. Guide
+summaries receive domain-specific continuity instructions, and the next model request gets a reminder to
+reload state, character and memories before proceeding. This does not advance gameplay or trigger a new recap
+in the middle of a scene. Important experiences must still be saved as they happen: a summary is lossy, and
+these safeguards do not guarantee preservation of every unsaved detail.
+
+The executable is now `mnemoteca`; the CLI arguments are unchanged. Existing author and adventure collection
+names are preserved. Character profiles and play state work without Mnemoteca; if optional recall is
+unavailable, the Guide continues without it. No memory database is automatically moved or migrated.
 
 It is not authoritative game state. Current scene, turns, HP/resources, inventory, flags, clocks, actor
 positions, and revealed secrets can only change through `game_state_update`. That tool checks the last-read
@@ -279,7 +395,7 @@ their content remain subject to their own licenses; the project license does not
 Local adventure packages are excluded from Git by default. See the skill credits above for original sources
 that informed the harness's writing guidance.
 
-The current build is a robust vertical slice, not a complete campaign engine. Tactical combat automation, map
-rendering, multi-user networking, and automated semantic review are later work. Structural validation checks
-references and required fields; it does not prove that every claim matches the source or prevent every model
-spoiler. Review authored content before playing.
+The current build is a robust vertical slice, not a complete campaign engine. Tactical combat automation,
+interactive player maps, multi-user networking, and automated semantic review are later work. Structural
+validation checks references and required fields; it does not prove that every claim matches the source or
+prevent every model spoiler. Review authored content before playing.

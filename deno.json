@@ -10,14 +10,14 @@
     "yaml": "npm:yaml@2.9.0"
   },
   "tasks": {
-    "adventure": "deno run --allow-read --allow-write --allow-run=unpdf,mnemosyne,fd,rg --allow-env --allow-net --allow-sys=homedir,osRelease --deny-ffi src/cli.ts",
+    "adventure": "deno run --allow-read --allow-write --allow-run=unpdf,pdftoppm,mnemoteca,fd,rg --allow-env --allow-net --allow-sys=homedir,osRelease --deny-ffi src/cli.ts",
     "check": "deno check src/cli.ts",
-    "test": "deno test --allow-read --allow-write --allow-run=deno,unpdf,mnemosyne --allow-env --allow-sys=homedir,osRelease --deny-ffi",
+    "test": "deno test --allow-read --allow-write --allow-run=deno,unpdf,pdftoppm,mnemoteca --allow-env --allow-sys=homedir,osRelease --deny-ffi",
     "fmt:check": "deno fmt --check",
     "verify": "deno task check && deno task test && deno task fmt:check"
   },
   "fmt": {
-    "exclude": ["adventures/"],
+    "exclude": ["adventures/", ".idea/"],
     "lineWidth": 110,
     "indentWidth": 2,
     "useTabs": false

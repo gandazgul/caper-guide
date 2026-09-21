@@ -17,17 +17,30 @@ export interface EvidenceRef {
   page: number;
 }
 
-export interface SourceRecord {
+interface SourceIdentity {
   id: string;
   title: string;
   sha256: string;
   originalFilename: string;
   importedFrom: string;
-  pdfPath: string;
-  extractedPath: string;
   pageCount: number;
   importedAt: string;
 }
+
+export interface PdfSourceRecord extends SourceIdentity {
+  kind?: "pdf"; // Omitted in existing version-1 packages.
+  pdfPath: string;
+  extractedPath: string;
+}
+
+export interface ImageSourceRecord extends SourceIdentity {
+  kind: "image";
+  imagePath: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  pageCount: 1;
+}
+
+export type SourceRecord = PdfSourceRecord | ImageSourceRecord;
 
 export interface AdventureManifest {
   schemaVersion: 1;
@@ -183,6 +196,9 @@ export interface GameState {
   adventureId: string;
   playId: string;
   revision: number;
+  playerCharacterId?: string;
+  characterSetupComplete?: boolean;
+  characterSheet?: { attributes: Record<string, number>; abilities: string[]; rulesNotes: string };
   startedAt: string;
   updatedAt: string;
   currentSceneId?: string;
@@ -196,6 +212,14 @@ export interface GameState {
 }
 
 export type StateChange =
+  | { kind: "select_character"; characterId: string }
+  | { kind: "complete_character_setup" }
+  | {
+    kind: "set_character_sheet";
+    attributes: Record<string, number>;
+    abilities: string[];
+    rulesNotes: string;
+  }
   | { kind: "set_current_scene"; sceneId: string }
   | { kind: "advance_turns"; amount: number }
   | { kind: "set_flag"; key: string; value: boolean | string | number }
