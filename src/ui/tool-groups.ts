@@ -10,6 +10,8 @@ import {
 } from "@earendil-works/pi-tui";
 
 export const EXPANDED_TOOL_LINE_LIMIT = 500;
+export const CHAT_HISTORY_COMPONENT_LIMIT = 120;
+export const CHAT_HISTORY_LINE_LIMIT = 2_000;
 
 // Pi 0.80.6 compatibility seam: retain its components/events/Ctrl+O behavior, but project
 // their display into harness-owned groups. No upstream package or extension is modified.
@@ -106,6 +108,8 @@ export class ToolGroupDisplay {
   }
 
   renderChildren(children: Component[], width: number): string[] {
+    const firstVisible = Math.max(0, children.length - CHAT_HISTORY_COMPONENT_LIMIT);
+    const visibleChildren = children.slice(firstVisible);
     const lines: string[] = [];
     let group: ToolExecutionComponent[] = [];
     let pendingBlank: string[] = [];
@@ -118,7 +122,7 @@ export class ToolGroupDisplay {
       lines.push(padding);
       group = [];
     };
-    for (const child of children) {
+    for (const child of visibleChildren) {
       if (child instanceof ToolExecutionComponent) {
         pendingBlank = [];
         group.push(child);
@@ -135,7 +139,13 @@ export class ToolGroupDisplay {
     }
     flush();
     lines.push(...pendingBlank);
-    return lines;
+
+    if (firstVisible === 0 && lines.length <= CHAT_HISTORY_LINE_LIMIT) return lines;
+    const notice = new Text("… older chat output hidden; the full session remains saved.", 0, 0).render(
+      width,
+    );
+    const available = Math.max(0, CHAT_HISTORY_LINE_LIMIT - notice.length);
+    return [...notice.slice(0, CHAT_HISTORY_LINE_LIMIT), ...lines.slice(-available)];
   }
 
   install(mode: unknown): void {
