@@ -15,6 +15,7 @@ import {
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentDefinition } from "./types.ts";
 import type { AdventurePackage } from "../adventure/package.ts";
+import { installTerminalMouseInputGuard } from "../ui/input-filter.ts";
 import { ToolGroupDisplay } from "../ui/tool-groups.ts";
 import { installGuideCompactionContinuity } from "./compaction.ts";
 
@@ -283,12 +284,14 @@ export async function runAgentTui(options: {
   toolDisplay.install(mode);
   const modeInternals = mode as unknown as {
     ui: {
+      addInputListener(listener: (input: string) => { consume?: boolean } | undefined): () => void;
       stop(): void;
       terminal: { drainInput(timeoutMs: number): Promise<void>; setTitle(title: string): void };
     };
     updateTerminalTitle(): void;
     uncaughtCrash(error: Error): never;
   };
+  installTerminalMouseInputGuard(modeInternals.ui);
   const terminalTitle = `${options.agent.displayName} — Adventure Runner`;
   modeInternals.updateTerminalTitle = () => modeInternals.ui.terminal.setTitle(terminalTitle);
   modeInternals.uncaughtCrash = (error: Error): never => {

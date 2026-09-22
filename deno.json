@@ -14,7 +14,8 @@
     "check": "deno check src/cli.ts",
     "test": "deno test --allow-read --allow-write --allow-run=deno,unpdf,pdftoppm,mnemoteca --allow-env --allow-sys=homedir,osRelease --deny-ffi",
     "fmt:check": "deno fmt --check",
-    "verify": "deno task check && deno task test && deno task fmt:check"
+    "verify": "deno task check && deno task test && deno task fmt:check",
+    "ci": "deno task verify"
   },
   "fmt": {
     "exclude": ["adventures/", ".idea/"],

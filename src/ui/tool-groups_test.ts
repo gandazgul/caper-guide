@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import { type Component, Container, Spacer, Text, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { EXPANDED_TOOL_LINE_LIMIT, type ToolDisplayState, ToolGroupDisplay } from "./tool-groups.ts";
 
@@ -56,6 +56,42 @@ Deno.test("collapsed tools are one bounded row; expansion retains head and tail 
   assertEquals(state.result!.content[0].text!.split("\n").length, 1000);
   state.expanded = false;
   assertEquals(display.renderTool(state, 80).length, 1);
+});
+
+Deno.test("long chat transcripts render only recent output", () => {
+  const display = new ToolGroupDisplay();
+  const container = new Container();
+  let renders = 0;
+  const message = (index: number): Component => ({
+    render: () => {
+      renders++;
+      return [`entry:${index}`];
+    },
+    invalidate() {},
+  });
+  for (let index = 0; index <= 120; index++) container.addChild(message(index));
+
+  display.install({ chatContainer: container });
+  const rendered = container.render(80);
+
+  assert(rendered.some((line) => line.includes("older chat output hidden")));
+  assert(!rendered.some((line) => line.includes("entry:0")));
+  assert(rendered.some((line) => line.includes("entry:120")));
+  assertEquals(renders, 120);
+});
+
+Deno.test("chat views bound large current output", () => {
+  const display = new ToolGroupDisplay();
+  const container = new Container();
+  const lines = Array.from({ length: 2_001 }, (_, index) => `entry:${index}`);
+  container.addChild({ render: () => lines, invalidate() {} });
+
+  display.install({ chatContainer: container });
+  const rendered = container.render(80);
+
+  assertEquals(rendered.length, 2_000);
+  assert(rendered.some((line) => line.includes("older chat output hidden")));
+  assert(rendered.some((line) => line.includes("entry:2000")));
 });
 
 Deno.test("real TUI tool components group together and preserve expansion, narration, and original results", async () => {
